@@ -1,4 +1,4 @@
 arduinimoog
 ===========
 
-Arduini MIDI controller for VST Minimoog
+Arduino MIDI controller for VST Minimoog
