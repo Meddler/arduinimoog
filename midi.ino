@@ -23,7 +23,7 @@ void setup() {
   //  Set MIDI baud rate:
   Serial.begin(31250);
   
-  pinMode(2, INPUT_PULLUP);
+  pinMode(2, INPUT);
   
   //Init arrays
   for (int i = 0; i < NUMBER_OF_POTS; i++)
