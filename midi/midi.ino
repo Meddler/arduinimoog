@@ -3,11 +3,11 @@
 //configure inputs and CCs
 #define MIDI_CHANNEL 1
 #define NUMBER_OF_POTS 2
-#define NUMBER_OF_SWITCHES 1
+#define NUMBER_OF_SWITCHES 13
 const int analogPins[NUMBER_OF_POTS] = {A0, A1};    // select the input pin for the potentiometer
 const int potCCs[NUMBER_OF_POTS] = {7, 8};
-const int digitalPins[NUMBER_OF_SWITCHES] = {2};
-const int switchCCs[NUMBER_OF_SWITCHES] = {9};
+const int digitalPins[NUMBER_OF_SWITCHES] = {22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34};
+const int switchCCs[NUMBER_OF_SWITCHES] = {85, 89, 80, 83, 81, 26, 82, 86, 87, 88, 67, 102, 103};
 
 //pot data arrays
 int lastPotValues[NUMBER_OF_POTS];
@@ -17,13 +17,16 @@ unsigned long potReadMillis[NUMBER_OF_POTS];
 
 //switch data arrays
 int lastSwitchValues[NUMBER_OF_SWITCHES];
-unsigned long switchReadMillis[NUMBER_OF_SWITCHES];
 
 void setup() {  
   //  Set MIDI baud rate:
   Serial.begin(31250);
   
-  pinMode(2, INPUT);
+  //Init switch pins
+  for (int i = 0; i < NUMBER_OF_SWITCHES; i++)
+  {
+    pinMode(digitalPins[i], INPUT);  
+  }  
   
   //Init arrays
   for (int i = 0; i < NUMBER_OF_POTS; i++)
