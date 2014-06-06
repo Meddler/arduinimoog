@@ -3,7 +3,7 @@
 #include "multiplexSelector.h"
 #endif 
 
-#define SMOOTH_READ_FACTOR 1
+#define SMOOTH_READ_FACTOR 20
 
 //configure inputs and CCs
 #define MIDI_CHANNEL 1
@@ -26,7 +26,7 @@ int lastSwitchValues[NUMBER_OF_SWITCHES];
 void setup() {  
   //  Set MIDI baud rate:
   Serial.begin(31250);
-  //Serial.begin(9600);
+  //Serial.begin(115200);
   
   //Init switch pins
   for (int i = 0; i < NUMBER_OF_SWITCHES; i++)
@@ -100,24 +100,45 @@ void readPots()
   digitalWrite(52, r2);  
   */
   
-  for (int i = 0; i < 20; i++)
+  for (int i = 0; i < NUMBER_OF_POTS; i++)
   {
-    int pin = i / 8;
+    unsigned long currentMillis = millis();    
     
-    int multiplexIndex = i % 8;
-    
-    multiplexSelect(multiplexIndex);
-    int sensorValue = analogRead(analogPins[pin]) / 8;
-    if (sensorValue != lastPotValues[i])
+    if (currentMillis != potReadMillis[i])
     {    
-      lastPotValues[i] = sensorValue;
-      //MIDI.sendControlChange(7, 127, 1);    
-      MIDI_TX(0xB0 + MIDI_CHANNEL - 1, potCCs[i], sensorValue);
-      //Serial.println(selectorIndex);
-    }    
+      int pin = i / 8;
+      
+      int multiplexIndex = i % 8;
+      
+      multiplexSelect(multiplexIndex);
+      double reading = analogRead(analogPins[pin]);
+      double fraction = reading / 8.055 + 0.5;
+      int sensorValue = fraction;
+      //if (sensorValue > 0)
+      //{
+        //Serial.println(reading);
+        //Serial.println(fraction);
+        //Serial.println(sensorValue);
+      //}
+      potReadMillis[i] = millis();
+      potTotals[i] = potTotals[i] + sensorValue;      
+      potReadCount[i]++;
+      
+      if (potReadCount[i] == SMOOTH_READ_FACTOR)
+      {
+        int average = ((double) potTotals[i] / SMOOTH_READ_FACTOR) + 0.5;        
+        if (average != lastPotValues[i])
+        {    
+          lastPotValues[i] = average;        
+          MIDI_TX(0xB0 + MIDI_CHANNEL - 1, potCCs[i], average);
+          //Serial.println(average);          
+        }
+        
+        potReadCount[i] = 0;
+        potTotals[i] = 0;
+      }        
+    }  
   }
-  
-  
   /*
   for (int i = 0; i < NUMBER_OF_POTS; i++)
   {
