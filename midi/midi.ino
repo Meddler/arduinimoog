@@ -7,7 +7,7 @@
 #include "multiplexBus.h"
 #endif 
 
-#define SMOOTH_READ_FACTOR 20
+#define SMOOTH_READ_FACTOR 10
 
 //configure inputs and CCs
 #define MIDI_CHANNEL 1
