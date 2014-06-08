@@ -1,6 +1,10 @@
 #ifndef _MULTIPLEX_SELECTOR_H
 #define _MULTIPLEX_SELECTOR_H
 #include "multiplexSelector.h"
+#endif
+#ifndef _MULTIPLEX_BUS_H
+#define _MULTIPLEX_BUS_H
+#include "multiplexBus.h"
 #endif 
 
 #define SMOOTH_READ_FACTOR 20
@@ -9,10 +13,14 @@
 #define MIDI_CHANNEL 1
 #define NUMBER_OF_POTS 20
 #define NUMBER_OF_SWITCHES 13
+#define NUMBER_OF_ROTARY_SWITCHES 6
+#define NUMBER_OF_ROTARY_SWITCH_PINS 5
 const int analogPins[3] = {A0, A1, A2};    // select the input pin for the potentiometer
 const int potCCs[NUMBER_OF_POTS] = {90, 5, 23, 12, 13, 75, 76, 77, 79, 78, 74, 20, 73, 71, 21, 72, 70, 22, 15, 7};
 const int digitalPins[NUMBER_OF_SWITCHES] = {22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34};
 const int switchCCs[NUMBER_OF_SWITCHES] = {85, 89, 80, 83, 81, 26, 82, 86, 87, 88, 67, 102, 103};
+const int rotarySwitchCCs[NUMBER_OF_ROTARY_SWITCHES] = { 92, 93, 95, 16, 17, 18 };
+const int rotarySwitchPins[NUMBER_OF_ROTARY_SWITCH_PINS] = { 46, 45, 44, 43, 42 };
 
 //pot data arrays
 int lastPotValues[NUMBER_OF_POTS];
@@ -22,6 +30,7 @@ unsigned long potReadMillis[NUMBER_OF_POTS];
 
 //switch data arrays
 int lastSwitchValues[NUMBER_OF_SWITCHES];
+int lastRotarySwitchValues[NUMBER_OF_ROTARY_SWITCHES * 6];
 
 void setup() {  
   //  Set MIDI baud rate:
@@ -33,10 +42,19 @@ void setup() {
   {
     pinMode(digitalPins[i], INPUT);  
   }
+  
+  for (int i = 0; i < NUMBER_OF_ROTARY_SWITCH_PINS; i++)
+  {
+    pinMode(rotarySwitchPins[i], INPUT_PULLUP);
+  }
+  
+  pinMode(50, OUTPUT);    // pots s0
+  pinMode(51, OUTPUT);    // pots s1
+  pinMode(52, OUTPUT);    // pots s2
 
-  pinMode(50, OUTPUT);    // s0
-  pinMode(51, OUTPUT);    // s1
-  pinMode(52, OUTPUT);    // s2  
+  pinMode(47, OUTPUT);    // rotary switches s0
+  pinMode(48, OUTPUT);    // rotary switches s1
+  pinMode(49, OUTPUT);    // rotary switches s2  
   
   //Init arrays
   for (int i = 0; i < NUMBER_OF_POTS; i++)
@@ -46,14 +64,44 @@ void setup() {
     potReadCount[i] = 0;
     potReadMillis[i] = 0;
   }
+  
+  //Init rotary switch data array so that values are sent at startup
+  for (int i = 0; i < NUMBER_OF_ROTARY_SWITCHES * 6; i++)
+  {
+    lastRotarySwitchValues[i] = -1;
+  }
 }
 
 void loop() 
 {   
   readPots();
-
   readSwitches();
- 
+  readRotarySwitches();
+}
+
+void readRotarySwitches()
+{
+  multiplexBus pins = {47, 48, 49};
+  
+  for (int i = 0; i < NUMBER_OF_ROTARY_SWITCHES * 6; i++)
+  {    
+    int pin = i / 8;    
+    int multiplexIndex = i % 8;
+    multiplexSelect(multiplexIndex, pins);
+    int sensorValue = digitalRead(rotarySwitchPins[pin]);
+    if (sensorValue != lastRotarySwitchValues[i])
+    {
+      lastRotarySwitchValues[i] = sensorValue;
+
+      if (sensorValue == LOW)
+      {     
+        int rotarySwitch = i / 6;
+        int pos = i % 6;
+        int value = pos * 127 / 5;      
+        MIDI_TX(0xB0 + MIDI_CHANNEL - 1, rotarySwitchCCs[rotarySwitch], value);
+      }
+    } 
+  }
 }
 
 multiplexSelector getSelector(int selectorIndex)
@@ -62,17 +110,17 @@ multiplexSelector getSelector(int selectorIndex)
   return selector;
 }
 
-void writeSelector(multiplexSelector selector)
+void writeSelector(multiplexSelector selector, multiplexBus pins)
 {
-  digitalWrite(50, selector.r0);
-  digitalWrite(51, selector.r1);
-  digitalWrite(52, selector.r2);
+  digitalWrite(pins.s0pin, selector.r0);
+  digitalWrite(pins.s1pin, selector.r1);
+  digitalWrite(pins.s2pin, selector.r2);
 }
 
-void multiplexSelect(int selectorIndex)
+void multiplexSelect(int selectorIndex, multiplexBus pins)
 {
   multiplexSelector selector = getSelector(selectorIndex);
-  writeSelector(selector);
+  writeSelector(selector, pins);
 }
 
 void readSwitches()
@@ -90,15 +138,7 @@ void readSwitches()
 
 void readPots()
 {
-  /*
-  int r0 = bitRead(0,0);    // use this with arduino 0013 (and newer versions)    
-  int r1 = bitRead(0,1);    // use this with arduino 0013 (and newer versions)    
-  int r2 = bitRead(0,2);    // use this with arduino 0013 (and newer versions)
-
-  digitalWrite(50, r0);
-  digitalWrite(51, r1);
-  digitalWrite(52, r2);  
-  */
+  multiplexBus pins = {50, 51, 52};
   
   for (int i = 0; i < NUMBER_OF_POTS; i++)
   {
@@ -110,7 +150,7 @@ void readPots()
       
       int multiplexIndex = i % 8;
       
-      multiplexSelect(multiplexIndex);
+      multiplexSelect(multiplexIndex, pins);
       double reading = analogRead(analogPins[pin]);
       double fraction = reading / 8.055 + 0.5;
       int sensorValue = fraction;
