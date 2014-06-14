@@ -10,6 +10,7 @@
 #define SMOOTH_READ_FACTOR 10
 
 //configure inputs and CCs
+#define USE_NRPN true
 #define MIDI_CHANNEL 1
 #define NUMBER_OF_POTS 20
 #define NUMBER_OF_SWITCHES 13
@@ -17,14 +18,17 @@
 #define NUMBER_OF_ROTARY_SWITCH_PINS 5
 const int analogPins[3] = {A0, A1, A2};    // select the input pin for the potentiometer
 const int potCCs[NUMBER_OF_POTS] = {90, 5, 23, 12, 13, 75, 76, 77, 79, 78, 74, 20, 73, 71, 21, 72, 70, 22, 15, 7};
+const int potNRPNs[NUMBER_OF_POTS] = {50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69};
 const int digitalPins[NUMBER_OF_SWITCHES] = {22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34};
 const int switchCCs[NUMBER_OF_SWITCHES] = {85, 89, 80, 83, 81, 26, 82, 86, 87, 88, 67, 102, 103};
 const int rotarySwitchCCs[NUMBER_OF_ROTARY_SWITCHES] = { 92, 93, 95, 16, 17, 18 };
 const int rotarySwitchPins[NUMBER_OF_ROTARY_SWITCH_PINS] = { 46, 45, 44, 43, 42 };
 
+const double NRPN_SCALING_FACTOR = (double)16383 / (double)1023;
+
 //pot data arrays
 int lastPotValues[NUMBER_OF_POTS];
-int potTotals[NUMBER_OF_POTS];
+unsigned long potTotals[NUMBER_OF_POTS];
 int potReadCount[NUMBER_OF_POTS];
 unsigned long potReadMillis[NUMBER_OF_POTS];
 
@@ -59,10 +63,15 @@ void setup() {
   //Init arrays
   for (int i = 0; i < NUMBER_OF_POTS; i++)
   {  
-    lastPotValues[i] = 0;
+    lastPotValues[i] = -1;
     potTotals[i] = 0;
     potReadCount[i] = 0;
     potReadMillis[i] = 0;
+  }
+  
+  for (int i = 0; i < NUMBER_OF_SWITCHES; i++)
+  {
+    lastSwitchValues[i] = -1;  
   }
   
   //Init rotary switch data array so that values are sent at startup
@@ -131,7 +140,15 @@ void readSwitches()
     if (sensorValue != lastSwitchValues[i])
     {
       lastSwitchValues[i] = sensorValue;
-      MIDI_TX(0xB0 + MIDI_CHANNEL - 1, switchCCs[i], sensorValue * 127);
+      
+      if (switchCCs[i] == 102)
+      {
+        MIDI_NRPN(1, sensorValue * 16383);
+      }
+      else
+      {      
+        MIDI_TX(0xB0 + MIDI_CHANNEL - 1, switchCCs[i], sensorValue * 127);
+      }
     }    
   }  
 }
@@ -152,16 +169,19 @@ void readPots()
       
       multiplexSelect(multiplexIndex, pins);
       double reading = analogRead(analogPins[pin]);
-      double fraction = reading / 8.055 + 0.5;
-      int sensorValue = fraction;
-      //if (sensorValue > 0)
-      //{
-        //Serial.println(reading);
-        //Serial.println(fraction);
-        //Serial.println(sensorValue);
-      //}
-      potReadMillis[i] = millis();
-      potTotals[i] = potTotals[i] + sensorValue;      
+      int sensorValue;
+      
+      if (USE_NRPN)
+      {
+        sensorValue = (int)(reading * NRPN_SCALING_FACTOR);
+      }
+      else
+      {
+        double fraction = reading / 8.055 + 0.5;
+        sensorValue = fraction;        
+      }      
+      potTotals[i] = potTotals[i] + sensorValue;
+      potReadMillis[i] = millis();            
       potReadCount[i]++;
       
       if (potReadCount[i] == SMOOTH_READ_FACTOR)
@@ -170,8 +190,15 @@ void readPots()
         if (average != lastPotValues[i])
         {    
           lastPotValues[i] = average;        
-          MIDI_TX(0xB0 + MIDI_CHANNEL - 1, potCCs[i], average);
-          //Serial.println(average);          
+          
+          if (USE_NRPN)
+          {            
+            MIDI_NRPN(potNRPNs[i], average);
+          }
+          else
+          {
+            MIDI_TX(0xB0 + MIDI_CHANNEL - 1, potCCs[i], average);
+          }     
         }
         
         potReadCount[i] = 0;
@@ -244,6 +271,20 @@ void MIDI_TX(byte MESSAGE, byte CONTROL, byte VALUE) //pass values out through s
    Serial.write(MESSAGE);
    Serial.write(CONTROL);
    Serial.write(VALUE);
+}
+
+void MIDI_NRPN(int number, int value)
+{  
+  byte lsbParameter = (byte)(number & 0x7F);
+  byte msbParameter = (byte)(number >> 7);
+  
+  byte lsbValue = (byte)(value & 0x7F);
+  byte msbValue = (byte)(value >> 7);
+  
+  MIDI_TX(0xB0 + MIDI_CHANNEL - 1, 99, msbParameter);
+  MIDI_TX(0xB0 + MIDI_CHANNEL - 1, 98, lsbParameter);
+  MIDI_TX(0xB0 + MIDI_CHANNEL - 1, 6, msbValue);
+  MIDI_TX(0xB0 + MIDI_CHANNEL - 1, 38, lsbValue);
 }
 
 int analogSmoothRead(int inputPin)
