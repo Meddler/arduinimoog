@@ -14,12 +14,15 @@
 #define MIDI_CHANNEL 1
 #define NUMBER_OF_POTS 20
 #define NUMBER_OF_SWITCHES 13
+#define NUMBER_OF_EXTERNAL_SWITCHES 6
 #define NUMBER_OF_ROTARY_SWITCHES 6
 #define NUMBER_OF_ROTARY_SWITCH_PINS 5
 const int analogPins[3] = {A0, A1, A2};    // select the input pin for the potentiometer
 const int potCCs[NUMBER_OF_POTS] = {90, 5, 23, 12, 13, 75, 76, 77, 79, 78, 74, 20, 73, 71, 21, 72, 70, 22, 15, 7};
 const int potNRPNs[NUMBER_OF_POTS] = {50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69};
 const int digitalPins[NUMBER_OF_SWITCHES] = {22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34};
+const int externalSwitchPins[NUMBER_OF_EXTERNAL_SWITCHES] = {8, 9, 10, 11, 12, 13 };
+const int externalSwitchCCs[NUMBER_OF_EXTERNAL_SWITCHES] = { 25, 84, 69, 65, 24, 24 };
 const int switchCCs[NUMBER_OF_SWITCHES] = {85, 89, 80, 83, 81, 26, 82, 86, 87, 88, 67, 102, 103};
 const int rotarySwitchCCs[NUMBER_OF_ROTARY_SWITCHES] = { 92, 93, 95, 16, 17, 18 };
 const int rotarySwitchPins[NUMBER_OF_ROTARY_SWITCH_PINS] = { 46, 45, 44, 43, 42 };
@@ -34,6 +37,7 @@ unsigned long potReadMillis[NUMBER_OF_POTS];
 
 //switch data arrays
 int lastSwitchValues[NUMBER_OF_SWITCHES];
+int lastExternalSwitchValues[NUMBER_OF_EXTERNAL_SWITCHES];
 int lastRotarySwitchValues[NUMBER_OF_ROTARY_SWITCHES * 6];
 
 void setup() {  
@@ -45,6 +49,11 @@ void setup() {
   for (int i = 0; i < NUMBER_OF_SWITCHES; i++)
   {
     pinMode(digitalPins[i], INPUT);  
+  }
+  
+  for (int i = 0; i < NUMBER_OF_EXTERNAL_SWITCHES; i++)
+  {
+    pinMode(externalSwitchPins[i], INPUT_PULLUP);
   }
   
   for (int i = 0; i < NUMBER_OF_ROTARY_SWITCH_PINS; i++)
@@ -72,6 +81,11 @@ void setup() {
   for (int i = 0; i < NUMBER_OF_SWITCHES; i++)
   {
     lastSwitchValues[i] = -1;  
+  }
+  
+  for (int i = 0; i < NUMBER_OF_EXTERNAL_SWITCHES; i++)
+  {
+    lastExternalSwitchValues[i] = -1;  
   }
   
   //Init rotary switch data array so that values are sent at startup
@@ -150,7 +164,35 @@ void readSwitches()
         MIDI_TX(0xB0 + MIDI_CHANNEL - 1, switchCCs[i], sensorValue * 127);
       }
     }    
-  }  
+  }
+  
+  //External switches
+  for (int i = 0; i < NUMBER_OF_EXTERNAL_SWITCHES - 2; i++)
+  {
+    boolean sensorValue = digitalRead(externalSwitchPins[i]);
+    if (sensorValue != lastExternalSwitchValues[i])
+    {
+      lastExternalSwitchValues[i] = sensorValue;
+      MIDI_TX(0xB0 + MIDI_CHANNEL - 1, externalSwitchCCs[i], !sensorValue * 127);      
+    }    
+  }
+  
+  int polyModeSwitchValue = digitalRead(externalSwitchPins[4]);
+  int legatoModeSwitchValue = digitalRead(externalSwitchPins[5]);
+  
+  if (polyModeSwitchValue != lastExternalSwitchValues[4] || legatoModeSwitchValue != lastExternalSwitchValues[5])
+  {
+    lastExternalSwitchValues[4] = polyModeSwitchValue;
+    lastExternalSwitchValues[5] = legatoModeSwitchValue;
+    
+    int maxValue = 127;
+    if (legatoModeSwitchValue == LOW)
+    {
+      maxValue = 64;
+    }
+    
+    MIDI_TX(0xB0 + MIDI_CHANNEL - 1, externalSwitchCCs[4], polyModeSwitchValue * maxValue);
+  }
 }
 
 void readPots()
